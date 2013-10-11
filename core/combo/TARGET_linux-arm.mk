@@ -67,17 +67,70 @@ else
 endif
 
 TARGET_NO_UNDEFINED_LDFLAGS := -Wl,--no-undefined
+ifeq ($(USE_MORE_OPT_FLAGS),yes)
+    TARGET_arm_CFLAGS :=    -Os \
+                            -fno-tree-vectorize \
+                            -fno-inline-functions \
+                            -fgcse-after-reload \
+                            -fipa-cp-clone \
+                            -fpredictive-commoning \
+                            -fsched-spec-load \
+                            -fvect-cost-model \
+                            -fomit-frame-pointer \
+                            -fstrict-aliasing \
+                            -Wstrict-aliasing=3 \
+                            -funswitch-loops
+else
+    TARGET_arm_CFLAGS :=    -O2 \
+                            -fgcse-after-reload \
+                            -fipa-cp-clone \
+                            -fpredictive-commoning \
+                            -fsched-spec-load \
+                            -funswitch-loops \
+                            -fvect-cost-model \
+                            -fomit-frame-pointer \
+                            -fstrict-aliasing \
+                            -Wstrict-aliasing=3 \
+                            -Werror=strict-aliasing
+endif
 
-TARGET_arm_CFLAGS :=    -O2 \
-                        -fomit-frame-pointer \
-                        -fstrict-aliasing    \
-                        -funswitch-loops
-
-# Modules can choose to compile some source as thumb.
-TARGET_thumb_CFLAGS :=  -mthumb \
-                        -Os \
-                        -fomit-frame-pointer \
-                        -fno-strict-aliasing
+# Modules can choose to compile some source as thumb. As
+# non-thumb enabled targets are supported, this is treated
+# as a 'hint'. If thumb is not enabled, these files are just
+# compiled as ARM.
+ifeq ($(ARCH_ARM_HAVE_THUMB_SUPPORT),true)
+    ifeq ($(USE_MORE_OPT_FLAGS),yes)
+        TARGET_thumb_CFLAGS :=  -mthumb \
+                                -Os \
+                                -fno-tree-vectorize \
+                                -fno-inline-functions \
+                                -fno-unswitch-loops \
+                                -fgcse-after-reload \
+                                -fipa-cp-clone \
+                                -fpredictive-commoning \
+                                -fsched-spec-load \
+                                -funswitch-loops \
+                                -fvect-cost-model \
+                                -fomit-frame-pointer \
+                                -fstrict-aliasing \
+                                -Wstrict-aliasing=3
+    else
+        TARGET_thumb_CFLAGS :=  -mthumb \
+                                -Os \
+                                -fgcse-after-reload \
+                                -fipa-cp-clone \
+                                -fpredictive-commoning \
+                                -fsched-spec-load \
+                                -funswitch-loops \
+                                -fvect-cost-model \
+                                -fomit-frame-pointer \
+                                -fstrict-aliasing \
+                                -Wstrict-aliasing=3 \
+                                -Werror=strict-aliasing
+    endif
+else
+TARGET_thumb_CFLAGS := $(TARGET_arm_CFLAGS)
+endif
 
 # Set FORCE_ARM_DEBUGGING to "true" in your buildspec.mk
 # or in your environment to force a full arm build, even for
@@ -117,11 +170,11 @@ android_config_h := $(call select-android-config-h,linux-arm)
 TARGET_ANDROID_CONFIG_CFLAGS := -include $(android_config_h) -I $(dir $(android_config_h))
 TARGET_GLOBAL_CFLAGS += $(TARGET_ANDROID_CONFIG_CFLAGS)
 
-# The "-Wunused-but-set-variable" option often breaks projects that enable
-# "-Wall -Werror" due to a commom idiom "ALOGV(mesg)" where ALOGV is turned
-# into no-op in some builds while mesg is defined earlier. So we explicitly
-# disable "-Wunused-but-set-variable" here.
-ifneq ($(filter 4.6 4.6.% 4.7 4.7.% 4.8, $(TARGET_GCC_VERSION)),)
+# This warning causes dalvik not to build with gcc 4.6+ and -Werror.
+# We cannot turn it off blindly since the option is not available
+# in gcc-4.4.x.  We also want to disable sincos optimization globally
+# by turning off the builtin sin function.
+ifneq ($(filter 4.6 4.6.% 4.7 4.7.%, $(TARGET_GCC_VERSION)),)
 TARGET_GLOBAL_CFLAGS += -Wno-unused-but-set-variable -fno-builtin-sin \
 			-fno-strict-volatile-bitfields
 endif
@@ -141,22 +194,33 @@ TARGET_GLOBAL_LDFLAGS += \
 			-Wl,-z,relro \
 			-Wl,-z,now \
 			-Wl,--warn-shared-textrel \
-			-Wl,--fatal-warnings \
 			-Wl,--icf=safe \
 			$(arch_variant_ldflags)
 
 TARGET_GLOBAL_CFLAGS += -mthumb-interwork
 
-TARGET_GLOBAL_CPPFLAGS += -fvisibility-inlines-hidden
+TARGET_GLOBAL_CPPFLAGS += -fvisibility-inlines-hidden $(call cc-option,-std=gnu++11)
 
 # More flags/options can be added here
-TARGET_RELEASE_CFLAGS := \
-			-DNDEBUG \
-			-g \
-			-Wstrict-aliasing=2 \
-			-fgcse-after-reload \
-			-frerun-cse-after-loop \
-			-frename-registers
+
+# More flags/options can be added here
+ifndef TARGET_EXTRA_CFLAGS
+  TARGET_RELEASE_CFLAGS := \
+        -DNDEBUG \
+        -g \
+        -Wstrict-aliasing=3 \
+        -fgcse-after-reload \
+        -frerun-cse-after-loop \
+        -frename-registers
+else
+  TARGET_RELEASE_CFLAGS += \
+        -DNDEBUG \
+        -g \
+        -Wstrict-aliasing=3 \
+        -fgcse-after-reload \
+        -frerun-cse-after-loop \
+        -frename-registers
+endif
 
 libc_root := bionic/libc
 libm_root := bionic/libm
