@@ -8,10 +8,9 @@ To make these errors go away, you have two choices:
 
    2) You can update current.txt by executing the following command:
          make update-api
-   
-   3) After updating the api you can continue compiling.
-         make -j5
 
+      To submit the revised current.txt to the main Android repository,
+      you will need approval.
 ******************************
 
 
